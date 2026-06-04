@@ -1,0 +1,486 @@
+<!--
+  Burn Tracker v1 — running-cost tracker for indie / AI builders
+  ------------------------------------------------------------
+  Spec (first loop):
+   - Register products (name only)
+   - Register cost items (service name / monthly amount / which product / optional URL)
+   - Dashboard: total monthly burn + per-product breakdown (highest first)
+   - Storage: localStorage (one key, whole state). Falls back to in-memory if blocked.
+   - No login / no auto-fetch / manual input only / monthly only
+  Single HTML file. Just open it in a browser and it runs.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Burn Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e0c0b;
+    --bg-soft:#171311;
+    --card:#1c1715;
+    --card-hi:#241d19;
+    --line:#332a25;
+    --line-soft:#271f1b;
+    --text:#f1e9e2;
+    --muted:#a89a8e;
+    --faint:#6f635a;
+    --ember:#ff7a2f;
+    --ember-soft:#ff9a5c;
+    --ember-deep:#c9491a;
+    --ok:#7bbf6a;
+    --danger:#e5604a;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans',system-ui,sans-serif;
+    --glow:rgba(255,122,47,.10);
+    --glow-strong:rgba(255,122,47,.18);
+    --btn-text:#190d05;
+  }
+  :root[data-theme="light"]{
+    --bg:#faf6f1;
+    --bg-soft:#f2ebe2;
+    --card:#ffffff;
+    --card-hi:#fbf4ec;
+    --line:#e6dccf;
+    --line-soft:#efe7dc;
+    --text:#251d16;
+    --muted:#6d6055;
+    --faint:#9a8d80;
+    --ember:#dd5a1c;
+    --ember-soft:#c4531d;
+    --ember-deep:#b8430f;
+    --danger:#c4422c;
+    --glow:rgba(221,90,28,.07);
+    --glow-strong:rgba(221,90,28,.10);
+    --btn-text:#fff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans)}
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(120% 80% at 50% -10%, var(--glow), transparent 60%),
+      var(--bg);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:880px;margin:0 auto;padding:28px 20px 64px}
+
+  /* header */
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:26px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--ember);box-shadow:0 0 14px var(--ember)}
+  .brand h1{font-size:18px;font-weight:600;letter-spacing:.3px;margin:0}
+  .brand span{color:var(--faint);font-family:var(--mono);font-size:12px}
+  .hgroup{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .cur{display:flex;gap:4px;background:var(--bg-soft);border:1px solid var(--line-soft);border-radius:9px;padding:3px}
+  .cur button{font-family:var(--mono);font-size:12px;color:var(--muted);background:none;border:0;padding:5px 10px;border-radius:7px;cursor:pointer}
+  .cur button.on{background:var(--card-hi);color:var(--text)}
+  .fx{display:flex;align-items:center;gap:5px;background:var(--bg-soft);border:1px solid var(--line-soft);border-radius:9px;padding:5px 9px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .fx input{width:54px;background:var(--card);border:1px solid var(--line);color:var(--text);font-family:var(--mono);font-size:12px;padding:3px 6px;border-radius:6px;text-align:right}
+  .fx input:focus{border-color:var(--ember);box-shadow:0 0 0 2px rgba(255,122,47,.12);outline:none}
+  .theme-btn{display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:var(--bg-soft);
+    border:1px solid var(--line-soft);border-radius:9px;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0}
+  .theme-btn:hover{color:var(--ember);border-color:var(--ember)}
+
+  /* hero */
+  .hero{
+    background:linear-gradient(180deg,var(--card-hi),var(--card));
+    border:1px solid var(--line);border-radius:18px;padding:26px 26px 22px;margin-bottom:24px;
+    position:relative;overflow:hidden;
+    animation:rise .5s ease both;
+  }
+  .hero::after{content:"";position:absolute;right:-40px;top:-60px;width:220px;height:220px;border-radius:50%;
+    background:radial-gradient(circle,var(--glow-strong),transparent 70%);pointer-events:none}
+  .hero .label{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint)}
+  .hero .total{font-family:var(--mono);font-weight:600;font-size:clamp(38px,9vw,58px);line-height:1.05;margin:8px 0 2px;letter-spacing:-1px}
+  .hero .total .cy{color:var(--ember)}
+  .hero .sub{color:var(--muted);font-size:13px}
+  .hero .stats{display:flex;gap:22px;margin-top:18px;flex-wrap:wrap}
+  .hero .stat{font-family:var(--mono)}
+  .hero .stat b{display:block;font-size:18px;font-weight:600}
+  .hero .stat small{color:var(--faint);font-size:11px;letter-spacing:.5px}
+
+  section{margin-bottom:26px}
+  .sec-title{font-family:var(--mono);font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);margin:0 0 12px 2px}
+
+  /* breakdown */
+  .prod{background:var(--card);border:1px solid var(--line-soft);border-radius:14px;padding:16px 16px 14px;margin-bottom:12px;animation:rise .45s ease both}
+  .prod.top{border-color:rgba(255,122,47,.45);background:linear-gradient(180deg,var(--card-hi),var(--card))}
+  .prow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .pname{font-weight:600;font-size:15px;display:flex;align-items:center;gap:8px;min-width:0}
+  .pname .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tag{font-family:var(--mono);font-size:10px;letter-spacing:.5px;color:var(--ember);border:1px solid rgba(255,122,47,.4);border-radius:20px;padding:2px 8px;white-space:nowrap}
+  .pamt{font-family:var(--mono);font-weight:600;font-size:16px;white-space:nowrap}
+  .pamt small{color:var(--faint);font-weight:400;font-size:11px;margin-left:6px}
+  .bar{height:6px;border-radius:6px;background:var(--line-soft);margin:11px 0 12px;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--ember-deep),var(--ember));transition:width .6s cubic-bezier(.2,.7,.2,1)}
+  .items{display:flex;flex-direction:column;gap:1px}
+  .item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line-soft);font-size:13px}
+  .item:first-child{border-top:0}
+  .item .svc{color:var(--muted)}
+  .item .svc a{color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--faint)}
+  .item .svc a:hover{color:var(--ember-soft);border-bottom-color:var(--ember-soft)}
+  .item .svc a::after{content:" \2197";font-size:10px;color:var(--faint)}
+  .item .right{display:flex;align-items:center;gap:12px}
+  .item .ia{font-family:var(--mono)}
+  .item .orig{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .x{background:none;border:0;color:var(--faint);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;border-radius:6px}
+  .x:hover{color:var(--danger);background:rgba(229,96,74,.1)}
+  .empty-svc{color:var(--faint);font-size:12px;font-style:italic;padding:6px 0}
+  .pdel{margin-top:10px}
+  .pdel button{font-family:var(--mono);font-size:11px;color:var(--faint);background:none;border:0;cursor:pointer;padding:2px 0}
+  .pdel button:hover{color:var(--danger)}
+
+  /* add panel */
+  .panel{background:var(--bg-soft);border:1px solid var(--line-soft);border-radius:14px;padding:16px}
+  .panel + .panel{margin-top:12px}
+  .panel h3{margin:0 0 12px;font-size:13px;font-weight:600;color:var(--text)}
+  .field-row{display:flex;gap:10px;flex-wrap:wrap}
+  .field{flex:1 1 140px;min-width:0}
+  .field label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+  input,select{width:100%;background:var(--card);border:1px solid var(--line);color:var(--text);
+    font-family:var(--sans);font-size:14px;padding:10px 11px;border-radius:9px;outline:none}
+  input::placeholder{color:var(--faint)}
+  input:focus,select:focus{border-color:var(--ember);box-shadow:0 0 0 3px rgba(255,122,47,.12)}
+  .amt-field{flex:0 1 130px}
+  .btn{margin-top:12px;width:100%;background:var(--ember);color:var(--btn-text);border:0;font-family:var(--sans);font-weight:600;
+    font-size:14px;padding:11px;border-radius:10px;cursor:pointer;transition:filter .15s,transform .05s}
+  .btn:hover{filter:brightness(1.07)}
+  .btn:active{transform:translateY(1px)}
+  .btn[disabled]{background:var(--line);color:var(--faint);cursor:not-allowed;filter:none}
+  .hint{color:var(--faint);font-size:12px;margin-top:9px;font-family:var(--mono)}
+
+  .blank{text-align:center;color:var(--faint);padding:30px 10px;font-size:14px;line-height:1.7}
+  .blank .big{font-size:30px;margin-bottom:6px}
+
+  footer{display:flex;justify-content:space-between;align-items:center;margin-top:34px;padding-top:18px;border-top:1px solid var(--line-soft);flex-wrap:wrap;gap:10px}
+  footer .note{color:var(--faint);font-size:11px;font-family:var(--mono);max-width:560px;line-height:1.6}
+  .reset{font-family:var(--mono);font-size:11px;color:var(--faint);background:none;border:1px solid var(--line-soft);border-radius:8px;padding:6px 10px;cursor:pointer}
+  .reset:hover{color:var(--danger);border-color:var(--danger)}
+
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media (max-width:560px){
+    .wrap{padding:20px 14px 50px}
+    .field{flex:1 1 100%}
+    .amt-field{flex:1 1 100%}
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span class="dot"></span>
+      <div>
+        <h1>Burn Tracker</h1>
+        <span>running cost / month</span>
+      </div>
+    </div>
+    <div class="hgroup">
+      <button class="theme-btn" id="theme" title="Toggle theme" aria-label="Toggle theme"></button>
+      <div class="fx"><span>1$ =</span><input id="rate" type="number" min="0" step="any" inputmode="decimal"><span>&yen;</span></div>
+      <div class="cur" id="cur"></div>
+    </div>
+  </header>
+
+  <!-- HERO: total burn -->
+  <div class="hero">
+    <div class="label">Monthly burn</div>
+    <div class="total" id="total"><span class="cy">&yen;</span>0</div>
+    <div class="sub" id="annual">&asymp; &yen;0 / year</div>
+    <div class="stats">
+      <div class="stat"><b id="st-prod">0</b><small>PRODUCTS</small></div>
+      <div class="stat"><b id="st-svc">0</b><small>SERVICES</small></div>
+    </div>
+  </div>
+
+  <!-- breakdown -->
+  <section>
+    <p class="sec-title">Breakdown by product</p>
+    <div id="breakdown"></div>
+  </section>
+
+  <!-- add panel -->
+  <section>
+    <p class="sec-title">Add</p>
+    <div class="panel">
+      <h3>Add a product</h3>
+      <div class="field-row">
+        <div class="field">
+          <label>Product name</label>
+          <input id="p-name" placeholder="e.g. Cost tracker" maxlength="60">
+        </div>
+      </div>
+      <button class="btn" id="add-product">+ Add product</button>
+    </div>
+
+    <div class="panel">
+      <h3>Add a cost</h3>
+      <div class="field-row">
+        <div class="field">
+          <label>Service</label>
+          <input id="c-svc" list="svc-list" placeholder="e.g. Vercel" maxlength="60">
+          <datalist id="svc-list"></datalist>
+        </div>
+        <div class="field amt-field">
+          <label>Monthly</label>
+          <input id="c-amt" type="number" inputmode="decimal" min="0" step="any" placeholder="0">
+        </div>
+        <div class="field amt-field">
+          <label>Currency</label>
+          <select id="c-cur"><option value="USD">USD ($)</option><option value="JPY">JPY (&yen;)</option></select>
+        </div>
+        <div class="field">
+          <label>Product</label>
+          <select id="c-prod"></select>
+        </div>
+        <div class="field" style="flex:1 1 100%">
+          <label>URL (optional &mdash; dashboard etc.)</label>
+          <input id="c-url" type="url" inputmode="url" placeholder="e.g. https://vercel.com/dashboard">
+        </div>
+      </div>
+      <button class="btn" id="add-cost">+ Add cost</button>
+      <div class="hint" id="cost-hint"></div>
+    </div>
+  </section>
+
+  <footer>
+    <span class="note">Data is stored only in this browser (localStorage). Each device keeps its own data &mdash; there is no sync (a v2 to-do once accounts are added). Currency conversion uses your manual rate (no auto-fetch). For yearly services, divide by 12 and enter the monthly figure.</span>
+    <button class="reset" id="reset">Clear all data</button>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- Storage (localStorage; falls back to memory) ---------- */
+  var KEY = "burn-tracker-v1";
+  var memory = null;
+  function load(){
+    try{ var raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; }
+    catch(e){ return memory; }
+  }
+  function save(s){
+    memory = s;
+    try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){ /* keep in-memory only */ }
+  }
+  function uid(){
+    try{ return crypto.randomUUID(); }
+    catch(e){ return "id-" + Date.now() + "-" + Math.random().toString(16).slice(2); }
+  }
+
+  /* ---------- State ---------- */
+  var state = load() || { version:1, currency:"JPY", rate:150, products:[], costs:[] };
+  if(!state.currency) state.currency = "JPY";
+  if(state.rate == null) state.rate = 150;
+  if(!state.theme) state.theme = "dark";
+  // Migrate legacy costs that have no currency: treat them as the current display currency
+  state.costs.forEach(function(c){ if(!c.currency) c.currency = state.currency; });
+
+  function applyTheme(){
+    document.documentElement.setAttribute("data-theme", state.theme);
+    var b = document.getElementById("theme");
+    if(b) b.textContent = state.theme === "light" ? "\u{1F319}" : "\u2600\uFE0F";
+  }
+  applyTheme();
+
+  var CUR = {
+    JPY:{ sym:"\u00A5", fmt:function(n){ return "\u00A5" + Math.round(n).toLocaleString("en-US"); } },
+    USD:{ sym:"$", fmt:function(n){ return "$" + n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); } }
+  };
+  function money(n){ return CUR[state.currency].fmt(n); }
+  function moneyIn(n,cur){ return CUR[cur].fmt(n); }
+
+  // Convert a cost amount from its own currency into the current display currency
+  function toDisplay(amount, fromCur){
+    var to = state.currency;
+    if(!fromCur || fromCur === to) return amount;
+    var r = Number(state.rate) || 0;
+    if(r <= 0) return amount;               // no rate set -> don't convert (safe side)
+    if(fromCur === "USD" && to === "JPY") return amount * r;
+    if(fromCur === "JPY" && to === "USD") return amount / r;
+    return amount;
+  }
+
+  /* ---------- Totals (never stored; recomputed every render) ---------- */
+  function totalsByProduct(){
+    var map = {};
+    state.products.forEach(function(p){ map[p.id] = 0; });
+    state.costs.forEach(function(c){
+      if(map[c.productId] === undefined) map[c.productId] = 0;
+      map[c.productId] += toDisplay(Number(c.monthly) || 0, c.currency);
+    });
+    return map;
+  }
+  function grandTotal(){
+    return state.costs.reduce(function(a,c){ return a + toDisplay(Number(c.monthly)||0, c.currency); }, 0);
+  }
+
+  /* ---------- Elements ---------- */
+  var $ = function(id){ return document.getElementById(id); };
+  var elTotal=$("total"), elAnnual=$("annual"), elStProd=$("st-prod"), elStSvc=$("st-svc"),
+      elBreak=$("breakdown"), elProdSel=$("c-prod"), elSvcList=$("svc-list"),
+      elCostBtn=$("add-cost"), elCostHint=$("cost-hint"), elCur=$("cur");
+
+  /* ---------- Render ---------- */
+  function render(){
+    var gt = grandTotal();
+    var totals = totalsByProduct();
+    var sym = CUR[state.currency].sym;
+
+    // Exchange-rate input (don't touch it while focused, to avoid disrupting the cursor)
+    var rin = $("rate");
+    if(rin && document.activeElement !== rin) rin.value = state.rate;
+
+    // hero
+    elTotal.innerHTML = '<span class="cy">'+sym+'</span>' + money(gt).slice(sym.length);
+    elAnnual.textContent = "\u2248 " + money(gt*12) + " / year";
+    elStProd.textContent = state.products.length;
+    elStSvc.textContent = state.costs.length;
+
+    // currency buttons
+    elCur.innerHTML = "";
+    ["JPY","USD"].forEach(function(c){
+      var b=document.createElement("button");
+      b.textContent=c; if(state.currency===c) b.className="on";
+      b.onclick=function(){ state.currency=c; save(state); render(); };
+      elCur.appendChild(b);
+    });
+
+    // product options + service suggestions
+    elProdSel.innerHTML="";
+    if(state.products.length===0){
+      var o=document.createElement("option"); o.textContent="Add a product first"; o.disabled=true; elProdSel.appendChild(o);
+    }
+    state.products.forEach(function(p){
+      var o=document.createElement("option"); o.value=p.id; o.textContent=p.name; elProdSel.appendChild(o);
+    });
+    var seen={}; elSvcList.innerHTML="";
+    state.costs.forEach(function(c){
+      if(c.service && !seen[c.service]){ seen[c.service]=1;
+        var o=document.createElement("option"); o.value=c.service; elSvcList.appendChild(o); }
+    });
+    var noProd = state.products.length===0;
+    elCostBtn.disabled = noProd;
+    elCostHint.textContent = noProd ? "Add a product first to attach costs." : "";
+
+    // breakdown (highest first)
+    elBreak.innerHTML="";
+    if(state.products.length===0){
+      elBreak.innerHTML='<div class="blank"><div class="big">\u{1F525}</div>Nothing tracked yet.<br>Add a product below to get started.</div>';
+      return;
+    }
+    var sorted = state.products.slice().sort(function(a,b){ return (totals[b.id]||0)-(totals[a.id]||0); });
+    var max = Math.max.apply(null, sorted.map(function(p){ return totals[p.id]||0; }).concat([1]));
+
+    sorted.forEach(function(p,idx){
+      var t = totals[p.id]||0;
+      var isTop = idx===0 && t>0;
+      var pct = gt>0 ? Math.round(t/gt*100) : 0;
+      var width = max>0 ? (t/max*100) : 0;
+
+      var costs = state.costs.filter(function(c){ return c.productId===p.id; })
+                             .sort(function(a,b){ return toDisplay(Number(b.monthly)||0,b.currency)-toDisplay(Number(a.monthly)||0,a.currency); });
+
+      var card=document.createElement("div");
+      card.className="prod"+(isTop?" top":"");
+      card.style.animationDelay=(idx*0.04)+"s";
+
+      var itemsHtml = costs.length
+        ? costs.map(function(c){
+            var amt = Number(c.monthly)||0;
+            var conv = money(toDisplay(amt, c.currency));
+            var orig = (c.currency && c.currency!==state.currency)
+              ? '<span class="orig">('+moneyIn(amt,c.currency)+')</span>' : '';
+            var name = esc(c.service||"(unnamed)");
+            var svcHtml = c.url
+              ? '<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+name+'</a>'
+              : name;
+            return '<div class="item"><span class="svc">'+svcHtml+'</span>'+
+                   '<span class="right">'+orig+'<span class="ia">'+conv+'</span>'+
+                   '<button class="x" data-del-cost="'+c.id+'" title="Delete">\u2715</button></span></div>';
+          }).join("")
+        : '<div class="empty-svc">No costs yet</div>';
+
+      card.innerHTML =
+        '<div class="prow">'+
+          '<div class="pname">'+(isTop?'<span class="tag">\u{1F525} Top burner</span>':'')+'<span class="nm">'+esc(p.name)+'</span></div>'+
+          '<div class="pamt">'+money(t)+'<small>'+pct+'%</small></div>'+
+        '</div>'+
+        '<div class="bar"><i style="width:0%"></i></div>'+
+        '<div class="items">'+itemsHtml+'</div>'+
+        '<div class="pdel"><button data-del-prod="'+p.id+'">Delete this product</button></div>';
+
+      elBreak.appendChild(card);
+      // animate the bar width
+      requestAnimationFrame(function(){ card.querySelector(".bar i").style.width = width+"%"; });
+    });
+
+    // delete handlers
+    elBreak.querySelectorAll("[data-del-cost]").forEach(function(b){
+      b.onclick=function(){ delCost(b.getAttribute("data-del-cost")); };
+    });
+    elBreak.querySelectorAll("[data-del-prod]").forEach(function(b){
+      b.onclick=function(){
+        var id=b.getAttribute("data-del-prod");
+        var p=state.products.find(function(x){return x.id===id;});
+        var n=state.costs.filter(function(c){return c.productId===id;}).length;
+        if(confirm('Delete "'+(p?p.name:"")+'"?'+(n?'\nIts '+n+' linked cost(s) will be removed too.':''))) delProduct(id);
+      };
+    });
+  }
+
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m];}); }
+
+  /* ---------- Actions ---------- */
+  function addProduct(){
+    var i=$("p-name"), name=i.value.trim();
+    if(!name) return;
+    state.products.push({ id:uid(), name:name });
+    save(state); i.value=""; render(); i.focus();
+  }
+  function addCost(){
+    if(state.products.length===0) return;
+    var svc=$("c-svc").value.trim();
+    var amt=parseFloat($("c-amt").value);
+    var cur=$("c-cur").value;
+    var pid=$("c-prod").value;
+    var url=$("c-url").value.trim();
+    if(url && !/^https?:\/\//i.test(url)) url = "https://" + url; // fill in missing scheme
+    if(!svc || isNaN(amt) || amt<0 || !pid) return;
+    state.costs.push({ id:uid(), productId:pid, service:svc, monthly:amt, currency:cur, url:url||"" });
+    save(state);
+    $("c-svc").value=""; $("c-amt").value=""; $("c-url").value=""; render(); $("c-svc").focus();
+  }
+  function delCost(id){ state.costs=state.costs.filter(function(c){return c.id!==id;}); save(state); render(); }
+  function delProduct(id){
+    state.products=state.products.filter(function(p){return p.id!==id;});
+    state.costs=state.costs.filter(function(c){return c.productId!==id;});
+    save(state); render();
+  }
+
+  $("add-product").onclick=addProduct;
+  $("add-cost").onclick=addCost;
+  $("theme").onclick=function(){
+    state.theme = (state.theme === "light") ? "dark" : "light";
+    save(state); applyTheme();
+  };
+  $("rate").addEventListener("input",function(){
+    var v=parseFloat(this.value);
+    state.rate = (isNaN(v)||v<0) ? 0 : v;
+    save(state); render();
+  });
+  $("p-name").addEventListener("keydown",function(e){ if(e.key==="Enter") addProduct(); });
+  $("c-amt").addEventListener("keydown",function(e){ if(e.key==="Enter") addCost(); });
+  $("c-url").addEventListener("keydown",function(e){ if(e.key==="Enter") addCost(); });
+  $("reset").onclick=function(){
+    if(confirm("This will erase all your data. Continue?")){
+      state={ version:1, currency:state.currency, rate:state.rate, theme:state.theme, products:[], costs:[] };
+      save(state); render();
+    }
+  };
+
+  render();
+})();
+</script>
