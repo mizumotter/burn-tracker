@@ -156,7 +156,10 @@
   .blank .big{font-size:30px;margin-bottom:6px}
 
   footer{display:flex;justify-content:space-between;align-items:center;margin-top:34px;padding-top:18px;border-top:1px solid var(--line-soft);flex-wrap:wrap;gap:10px}
-  footer .note{color:var(--faint);font-size:11px;font-family:var(--mono);max-width:560px;line-height:1.6}
+  footer .note{color:var(--faint);font-size:11px;font-family:var(--mono);max-width:520px;line-height:1.6}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .io-btn{font-family:var(--mono);font-size:11px;color:var(--muted);background:none;border:1px solid var(--line-soft);border-radius:8px;padding:6px 10px;cursor:pointer}
+  .io-btn:hover{color:var(--ember);border-color:var(--ember)}
   .reset{font-family:var(--mono);font-size:11px;color:var(--faint);background:none;border:1px solid var(--line-soft);border-radius:8px;padding:6px 10px;cursor:pointer}
   .reset:hover{color:var(--danger);border-color:var(--danger)}
 
@@ -246,8 +249,13 @@
   </section>
 
   <footer>
-    <span class="note">Data is stored only in this browser (localStorage). Each device keeps its own data &mdash; there is no sync (a v2 to-do once accounts are added). Currency conversion uses your manual rate (no auto-fetch). For yearly services, divide by 12 and enter the monthly figure.</span>
-    <button class="reset" id="reset">Clear all data</button>
+    <span class="note">Data is stored only in this browser (localStorage). Each device keeps its own data &mdash; there is no sync (a v2 to-do once accounts are added). Currency conversion uses your manual rate (no auto-fetch). For yearly services, divide by 12 and enter the monthly figure. Tip: use Export to keep a backup.</span>
+    <div class="actions">
+      <button class="io-btn" id="export">Export</button>
+      <button class="io-btn" id="import">Import</button>
+      <input type="file" id="import-file" accept="application/json,.json" style="display:none">
+      <button class="reset" id="reset">Clear all data</button>
+    </div>
   </footer>
 </div>
 
@@ -480,6 +488,49 @@
       state={ version:1, currency:state.currency, rate:state.rate, theme:state.theme, products:[], costs:[] };
       save(state); render();
     }
+  };
+
+  // Export: download the whole state as a JSON backup file
+  $("export").onclick=function(){
+    try{
+      var blob = new Blob([JSON.stringify(state, null, 2)], { type:"application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      var d = new Date(), pad=function(n){return (n<10?"0":"")+n;};
+      a.href = url;
+      a.download = "burn-tracker-backup-" + d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate()) + ".json";
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+    }catch(e){ alert("Export failed: " + e.message); }
+  };
+
+  // Import: read a previously exported JSON file and replace the current data
+  $("import").onclick=function(){ $("import-file").click(); };
+  $("import-file").onchange=function(){
+    var file = this.files && this.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var data = JSON.parse(reader.result);
+        if(!data || !Array.isArray(data.products) || !Array.isArray(data.costs)){
+          alert("This doesn't look like a Burn Tracker backup file."); return;
+        }
+        if(!confirm("Import this backup? It will replace all current data.")) return;
+        state = {
+          version: 1,
+          currency: (data.currency === "USD" || data.currency === "JPY") ? data.currency : "JPY",
+          rate: (data.rate != null && !isNaN(Number(data.rate))) ? Number(data.rate) : 150,
+          theme: (data.theme === "light" || data.theme === "dark") ? data.theme : state.theme,
+          products: data.products,
+          costs: data.costs
+        };
+        state.costs.forEach(function(c){ if(!c.currency) c.currency = state.currency; });
+        save(state); applyTheme(); render();
+      }catch(e){ alert("Import failed: " + e.message); }
+    };
+    reader.readAsText(file);
+    this.value = ""; // allow re-importing the same file later
   };
 
   render();
