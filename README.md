@@ -6,6 +6,8 @@ A tiny, single-file web app for indie hackers and AI builders who ship a lot of 
 
 No accounts. No tracking. No build step. Just one HTML file.
 
+**Live:** [burn.solocamp.work](https://burn.solocamp.work)
+
 ---
 
 ## Why
@@ -24,14 +26,12 @@ If you spin up a new project every week, your running costs scatter across a doz
 
 ## Run locally
 
-No build, no dependencies. Just open the file:
+No build, no dependencies. Clone or download the repo and open `index.html`:
 
 ```
 open index.html      # macOS
-# or double-click the file in any OS
+# or just double-click the file in any OS
 ```
-
-> The app is a single `index.html`. If your copy is named `burn-tracker.html`, rename it to `index.html` before deploying so it loads at the site root.
 
 ## Deploy (free)
 
@@ -63,4 +63,4 @@ A custom domain (e.g. a subdomain of your own domain) can be attached later from
 
 ## License
 
-MIT — do whatever you like. (Add a `LICENSE` file if you publish.)
+MIT — do whatever you like.
