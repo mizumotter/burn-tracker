@@ -723,15 +723,16 @@
             var orig = (c.currency && c.currency!==state.currency)
               ? '<span class="orig">('+moneyIn(amt,c.currency)+')</span>' : '';
             var name = esc(c.service||"(unnamed)");
-            var svcHtml = c.url
-              ? '<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+name+'</a>'
+            var safe = safeUrl(c.url);
+            var svcHtml = safe
+              ? '<a href="'+esc(safe)+'" target="_blank" rel="noopener noreferrer">'+name+'</a>'
               : name;
             var cat = '<span class="cat">'+esc(catLabel(c.category))+'</span>';
             var cls = "item"+(editingCostId===c.id?" editing":"");
             return '<div class="'+cls+'"><span class="svc">'+cat+svcHtml+'</span>'+
                    '<span class="right">'+orig+'<span class="ia">'+conv+'</span>'+
-                   '<button class="e" data-edit-cost="'+c.id+'" title="Edit">\u270e</button>'+
-                   '<button class="x" data-del-cost="'+c.id+'" title="Delete">\u2715</button></span></div>';
+                   '<button class="e" data-edit-cost="'+esc(c.id)+'" title="Edit">\u270e</button>'+
+                   '<button class="x" data-del-cost="'+esc(c.id)+'" title="Delete">\u2715</button></span></div>';
           }).join("")
         : '<div class="empty-svc">No costs yet</div>';
 
@@ -742,7 +743,7 @@
         '</div>'+
         '<div class="bar"><i style="width:0%"></i></div>'+
         '<div class="items">'+itemsHtml+'</div>'+
-        '<div class="pdel"><button data-del-prod="'+p.id+'">Delete this product</button></div>';
+        '<div class="pdel"><button data-del-prod="'+esc(p.id)+'">Delete this product</button></div>';
 
       elBreak.appendChild(card);
       // animate the bar width
@@ -767,6 +768,46 @@
   }
 
   function esc(s){ return String(s).replace(/[&<>"]/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m];}); }
+
+  // Only allow URLs that use the http(s) scheme — blocks javascript:, data:, etc.
+  function safeUrl(u){
+    if(typeof u !== "string" || !u) return "";
+    return /^https?:\/\//i.test(u) ? u : "";
+  }
+
+  // Validate + sanitize imported backup data before any of it touches state.
+  // Drops malformed items, clamps values, strips unsafe URLs, falls back categories.
+  function sanitizeImported(data){
+    var validProdIds = {};
+    var products = (Array.isArray(data.products) ? data.products : [])
+      .filter(function(p){ return p && typeof p.id === "string" && typeof p.name === "string"; })
+      .map(function(p){
+        validProdIds[p.id] = 1;
+        return { id: p.id, name: String(p.name).slice(0,200) };
+      });
+    var validCatIds = {};
+    CATEGORIES.forEach(function(c){ validCatIds[c.id] = 1; });
+    var costs = (Array.isArray(data.costs) ? data.costs : [])
+      .filter(function(c){
+        return c && typeof c.id === "string"
+            && typeof c.productId === "string" && validProdIds[c.productId]
+            && typeof c.service === "string";
+      })
+      .map(function(c){
+        var amt = Number(c.monthly);
+        if(!isFinite(amt) || amt < 0) amt = 0;
+        return {
+          id: c.id,
+          productId: c.productId,
+          service: String(c.service).slice(0,200),
+          monthly: amt,
+          currency: (c.currency === "USD" || c.currency === "JPY") ? c.currency : "JPY",
+          category: validCatIds[c.category] ? c.category : "other",
+          url: safeUrl(c.url)
+        };
+      });
+    return { products: products, costs: costs };
+  }
 
   /* ---------- Actions ---------- */
   function addProduct(){
@@ -863,18 +904,16 @@
           alert("This doesn't look like a Burn Tracker backup file."); return;
         }
         if(!confirm("Import this backup? It will replace all current data.")) return;
+        var clean = sanitizeImported(data);
         state = {
           version: 1,
           currency: (data.currency === "USD" || data.currency === "JPY") ? data.currency : "JPY",
           rate: (data.rate != null && !isNaN(Number(data.rate))) ? Number(data.rate) : 150,
           theme: (data.theme === "light" || data.theme === "dark") ? data.theme : state.theme,
-          products: data.products,
-          costs: data.costs
+          products: clean.products,
+          costs: clean.costs
         };
-        state.costs.forEach(function(c){
-          if(!c.currency) c.currency = state.currency;
-          if(!c.category) c.category = "other";
-        });
+        // sanitizeImported already filled in currency/category defaults — no further migration needed
         save(state); applyTheme(); render();
       }catch(e){ alert("Import failed: " + e.message); }
     };
