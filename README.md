@@ -8,11 +8,21 @@ No accounts. No tracking. No build step. Just one HTML file.
 
 **Live:** [burn.solocamp.work](https://burn.solocamp.work)
 
-![Burn Tracker — dark theme](screenshots/dark.jpg)
+![Burn Tracker — Ember theme](screenshots/ember.jpg)
 
-<details><summary>Light theme</summary>
+<details><summary>More themes — 🧮 Ledger, 💼 Boardroom, 🌋 Wildfire, 🌀 Storm, ⚪ Simple</summary>
 
-![Burn Tracker — light theme](screenshots/light.jpg)
+| 🧮 Ledger | 💼 Boardroom |
+|---|---|
+| ![Ledger theme](screenshots/ledger.jpg) | ![Boardroom theme](screenshots/boardroom.jpg) |
+
+| 🌋 Wildfire | 🌀 Storm |
+|---|---|
+| ![Wildfire theme](screenshots/wildfire.jpg) | ![Storm theme](screenshots/storm.jpg) |
+
+| ⚪ Simple | |
+|---|---|
+| ![Simple theme](screenshots/simple.jpg) | |
 
 </details>
 
