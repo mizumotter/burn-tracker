@@ -8,6 +8,10 @@
    - Storage: localStorage (one key, whole state). Falls back to in-memory if blocked.
    - No login / no auto-fetch / manual input only / monthly only
   Single HTML file. Just open it in a browser and it runs.
+
+  !! SECURITY: the inline script block below is allowed by its SHA-256 hash in _headers (CSP).
+  !! After ANY edit to that script, recompute the hash and update _headers, or the live
+  !! site stops working (blank app + CSP error in the console). Command: see _headers.
 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -695,6 +699,10 @@
   </footer>
 </div>
 
+<!--
+  !! Editing the script block below? Its SHA-256 hash is pinned in _headers (CSP script-src).
+  !! Recompute and update it before deploying — see the command at the top of _headers.
+-->
 <script>
 (function(){
   "use strict";
