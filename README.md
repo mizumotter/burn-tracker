@@ -4,7 +4,7 @@
 
 A tiny, single-file web app for indie hackers and AI builders who ship a lot of small products and lose track of which one is quietly draining money. Add your products, list the services each one uses, and see your total monthly burn plus a per-product breakdown sorted highest-first — so the biggest money sink is impossible to miss.
 
-No accounts. No tracking. No build step. Just one HTML file.
+No accounts. No cookies. No build step. Just one HTML file.
 
 **Live:** [burn.solocamp.work](https://burn.solocamp.work)
 
@@ -65,6 +65,8 @@ A custom domain (e.g. a subdomain of your own domain) can be attached later from
 - Stored in your browser via `localStorage` under the key `burn-tracker-v1`.
 - **Per-device:** data does not sync between your PC and phone, or between different browsers. Clearing site data erases it.
 - If `localStorage` is unavailable (e.g. a sandboxed preview), the app keeps working in memory for the session.
+- Your data never leaves the browser. The hosted site at burn.solocamp.work loads Cloudflare Web Analytics (cookieless page-view counts only); remove that `<script>` tag at the bottom of `index.html` if you self-host and want zero outbound requests.
+- Strict security headers (`_headers`): the inline script is allowed by its SHA-256 hash, not `'unsafe-inline'`. Recompute the hash when you edit the script (command in `_headers`).
 
 ## Tech notes
 

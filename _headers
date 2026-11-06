@@ -1,6 +1,12 @@
 # Cloudflare Pages — security headers for all routes
+#
+# script-src allows the single inline <script> in index.html by its SHA-256 hash
+# (no 'unsafe-inline'). Whenever that script changes, recompute the hash and update it here:
+#   python3 -c "import re,hashlib,base64;b=re.search(r'<script>(.*?)</script>',open('index.html',encoding='utf-8').read(),re.S).group(1);print(base64.b64encode(hashlib.sha256(b.encode()).digest()).decode())"
+# If the hash is stale, the app silently does nothing (check the browser console for a CSP error).
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-aI7db+dYJkytIZDRINwNko04srlW4dhhgoPfnmuuEYY=' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
